@@ -2,7 +2,6 @@
 // 音階名
 const notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
-// カスタムカラー (反時計回り配置用C=Red)
 const customColors = [
     "rgb(255, 0, 0)",   // C
     "rgb(255, 86, 35)",  // C#
@@ -24,24 +23,25 @@ const centerDisplay = document.getElementById('centerDisplay');
 const toneSelector = document.getElementById('toneType');
 const rotateLeftBtn = document.getElementById('rotateLeft');
 const rotateRightBtn = document.getElementById('rotateRight');
-const overlay = document.getElementById('overlay'); // ★追加
-const startBtn = document.getElementById('startBtn'); // ★追加
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('startBtn');
 
 let audioCtx;
 let analyser;
 
 let rotationOffset = 0;
 let smoothedVal = 0;
-let isAudioReady = false; // ★追加: オーディオ準備完了フラグ
+let isAudioReady = false;
+
+// ★修正1: 現在の色を保存する変数を追加
+let currentBaseColor = 'rgb(255, 255, 255)';
 
 // --- 初期化 ---
 function init() {
     renderWheel();
 
-    // ★変更: スタートボタンのクリックイベントでオーディオ初期化
     startBtn.addEventListener('click', async () => {
         await initAudio();
-        // 準備完了したらオーバーレイを消す
         if (audioCtx && audioCtx.state === 'running') {
             isAudioReady = true;
             overlay.classList.add('hidden');
@@ -60,7 +60,7 @@ function init() {
     });
 }
 
-// --- オーディオ初期化 (非同期処理) ---
+// --- オーディオ初期化 ---
 async function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -72,7 +72,6 @@ async function initAudio() {
         analyser.connect(audioCtx.destination);
     }
 
-    // サスペンド状態なら再開待機
     if (audioCtx.state === 'suspended') {
         await audioCtx.resume();
     }
@@ -116,8 +115,6 @@ function renderWheel() {
 
 // --- 音生成 ---
 function playNote(noteIndex, colorStr) {
-    // ★重要: オーディオの準備ができていない、またはコンテキストが無い場合は何もしない
-    // これにより、バックグラウンドでオシレーターが大量生成されるのを防ぐ
     if (!isAudioReady || !audioCtx || audioCtx.state !== 'running') {
         return;
     }
@@ -192,6 +189,8 @@ function playNote(noteIndex, colorStr) {
 }
 
 function updateCenterColor(color) {
+    // ★修正2: グローバル変数に現在色を保存
+    currentBaseColor = color;
     centerDisplay.style.backgroundColor = color;
 }
 
@@ -220,13 +219,12 @@ function drawVisual() {
         }
     } else {
         const size = 50 + (smoothedVal * 3);
-        centerDisplay.style.backgroundColor = customColors[0]; // 一時的な参照、実際はPlayNoteで更新
-        // ※PlayNoteで色が更新されるためここはあまり気にしなくてOK
+        // ★修正3: customColors[0] (赤固定) ではなく、保存した現在色 (currentBaseColor) を使用
+        centerDisplay.style.backgroundColor = currentBaseColor;
         centerDisplay.style.width = `${size}px`;
         centerDisplay.style.height = `${size}px`;
-        // 現在の背景色を取得して反映させるのは少し複雑なので、
-        // 簡易的に前回の色(currentBaseColor)を使うのがベストだが、
-        // グローバル変数を使えばOK。今回は簡易実装。
+        // 光る演出（boxShadow）にも現在色を適用
+        centerDisplay.style.boxShadow = `0 0 ${size / 2}px ${currentBaseColor}`;
     }
 }
 
