@@ -29,29 +29,30 @@ const rotateRightBtn = document.getElementById('rotateRight');
 let audioCtx;
 let analyser;
 
-// 回転状態 (0 = 初期位置, 1 = 右に1つずれる, -1 = 左に1つずれる)
+// 回転状態
 let rotationOffset = 0;
+
+// ★追加: ビジュアルのスムージング用変数
+let smoothedVal = 0;
 
 // --- 初期化 ---
 function init() {
     renderWheel();
     requestAnimationFrame(drawVisual);
 
-    // 回転ボタンのイベントリスナー
     rotateLeftBtn.addEventListener('click', () => {
-        rotationOffset -= 1; // 反時計回り
+        rotationOffset -= 1;
         renderWheel();
     });
 
     rotateRightBtn.addEventListener('click', () => {
-        rotationOffset += 1; // 時計回り
+        rotationOffset += 1;
         renderWheel();
     });
 }
 
-// --- 円環の描画 (再描画対応) ---
+// --- 円環の描画 ---
 function renderWheel() {
-    // 既存のボタンを削除（中心の円以外）
     const existingBtns = document.querySelectorAll('.note-btn');
     existingBtns.forEach(btn => btn.remove());
 
@@ -62,11 +63,6 @@ function renderWheel() {
 
     notes.forEach((note, index) => {
         const color = customColors[index];
-
-        // 配置角度の計算
-        // 基本: -90度(12時)スタート, 反時計回り(- index * step)
-        // 回転オフセットを加算 (+ rotationOffset * step)
-        // ※右ボタン(offset+)で時計回りに配置が動くようにする
         const placementAngleDeg = -90 - (index * angleStep) + (rotationOffset * angleStep);
         const placementAngleRad = placementAngleDeg * (Math.PI / 180);
 
@@ -106,7 +102,7 @@ function initAudio() {
     }
 }
 
-// --- 音生成のメインロジック ---
+// --- 音生成 ---
 function playNote(noteIndex, colorStr) {
     initAudio();
 
@@ -116,20 +112,17 @@ function playNote(noteIndex, colorStr) {
     const mainGain = audioCtx.createGain();
     mainGain.connect(analyser);
 
-    // アタック・ディケイ設定 (長く伸びる設定)
     mainGain.gain.setValueAtTime(0, now);
     mainGain.gain.linearRampToValueAtTime(1.0, now + 0.05);
     mainGain.gain.exponentialRampToValueAtTime(0.001, now + 3.0);
 
     if (type === 'shepard') {
-        // --- シェパードトーン ---
         const baseC = 16.35;
         const pitchCoef = Math.pow(2, noteIndex / 12);
         const centerFreq = 500;
 
         for (let octave = 0; octave < 10; octave++) {
             const freq = baseC * Math.pow(2, octave) * pitchCoef;
-
             if (freq < 20 || freq > 16000) continue;
 
             const logF = Math.log2(freq);
@@ -142,19 +135,14 @@ function playNote(noteIndex, colorStr) {
             const osc = audioCtx.createOscillator();
             osc.type = 'sine';
             osc.frequency.value = freq;
-
             const oscGain = audioCtx.createGain();
             oscGain.gain.value = weight * 0.3;
-
             osc.connect(oscGain);
             oscGain.connect(mainGain);
-
             osc.start(now);
             osc.stop(now + 3.5);
         }
-
     } else {
-        // --- 通常音色 ---
         const baseFreq = 261.63;
         const freq = baseFreq * Math.pow(2, noteIndex / 12);
 
@@ -165,32 +153,25 @@ function playNote(noteIndex, colorStr) {
             osc.connect(mainGain);
             osc.start(now);
             osc.stop(now + 3.5);
-
         } else if (type === 'epiano') {
             const carrier = audioCtx.createOscillator();
             carrier.type = 'sine';
             carrier.frequency.value = freq;
-
             const modulator = audioCtx.createOscillator();
             modulator.type = 'sine';
             modulator.frequency.value = freq * 4;
-
             const modGain = audioCtx.createGain();
             modGain.gain.setValueAtTime(freq * 1.5, now);
             modGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-
             modulator.connect(modGain);
             modGain.connect(carrier.frequency);
-
             carrier.connect(mainGain);
-
             carrier.start(now);
             modulator.start(now);
             carrier.stop(now + 3.5);
             modulator.stop(now + 3.5);
         }
     }
-
     updateCenterColor(colorStr);
 }
 
@@ -201,6 +182,7 @@ function updateCenterColor(color) {
     centerDisplay.style.backgroundColor = color;
 }
 
+// --- ビジュアル描画（スムージング適用） ---
 function drawVisual() {
     requestAnimationFrame(drawVisual);
     if (!analyser) return;
@@ -209,21 +191,33 @@ function drawVisual() {
     const dataArray = new Uint8Array(bufferLength);
     analyser.getByteTimeDomainData(dataArray);
 
+    // 1. 現在のフレームの最大振幅を取得
     let maxVal = 0;
     for (let i = 0; i < bufferLength; i++) {
         const v = Math.abs(dataArray[i] - 128);
         if (v > maxVal) maxVal = v;
     }
 
-    if (maxVal < 2) {
+    // 2. スムージング処理（時間平均に近い挙動）
+    // 現在の smoothedVal に、目標値(maxVal)との差分の 10% を足す
+    // これにより、急激な変化が抑制され、ヌルっと動くようになる
+    smoothedVal += (maxVal - smoothedVal) * 0.1;
+
+    // 3. 描画反映
+    // 完全に音が止まった時のノイズ対策として閾値チェック
+    if (smoothedVal < 1.0) {
         if (centerDisplay.style.backgroundColor !== 'white') {
+            // ほぼ無音になったら白に戻す
+            // ここも急にパチっと変わらないように少し余裕を持たせても良いが、
+            // 白戻りは明確にするためこのまま
             centerDisplay.style.backgroundColor = 'white';
             centerDisplay.style.width = '20px';
             centerDisplay.style.height = '20px';
             centerDisplay.style.boxShadow = 'none';
         }
     } else {
-        const size = 50 + (maxVal * 3);
+        // 音が鳴っている時
+        const size = 50 + (smoothedVal * 3);
         centerDisplay.style.backgroundColor = currentBaseColor;
         centerDisplay.style.width = `${size}px`;
         centerDisplay.style.height = `${size}px`;
@@ -231,5 +225,4 @@ function drawVisual() {
     }
 }
 
-// 実行
 init();
