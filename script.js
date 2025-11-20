@@ -2,6 +2,7 @@
 // 音階名
 const notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
+// カスタムカラー (ユーザー設定)
 const customColors = [
     "rgb(255, 0, 0)",   // C
     "rgb(255, 86, 35)",  // C#
@@ -26,15 +27,15 @@ const rotateRightBtn = document.getElementById('rotateRight');
 const overlay = document.getElementById('overlay');
 const startBtn = document.getElementById('startBtn');
 
+// グローバル変数
 let audioCtx;
 let analyser;
+let compressor; // ★追加: 音割れ防止用コンプレッサー
 
 let rotationOffset = 0;
 let smoothedVal = 0;
 let isAudioReady = false;
-
-// ★修正1: 現在の色を保存する変数を追加
-let currentBaseColor = 'rgb(255, 255, 255)';
+let currentBaseColor = 'rgb(255, 255, 255)'; // 現在の色保存用
 
 // --- 初期化 ---
 function init() {
@@ -64,11 +65,24 @@ function init() {
 async function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // ★修正: 音響回路の構築 (コンプレッサーの導入)
+        // 音の流れ: [各音源] -> [Compressor] -> [Analyser] -> [Destination(スピーカー)]
+
+        // 1. コンプレッサー作成 (リミッターとして設定)
+        compressor = audioCtx.createDynamicsCompressor();
+        compressor.threshold.setValueAtTime(-24, audioCtx.currentTime); // -24dBを超えたら圧縮開始
+        compressor.knee.setValueAtTime(30, audioCtx.currentTime);       // 滑らかに圧縮
+        compressor.ratio.setValueAtTime(12, audioCtx.currentTime);      // 強く圧縮して音割れを防ぐ
+        compressor.attack.setValueAtTime(0.003, audioCtx.currentTime);  // 素早く反応
+        compressor.release.setValueAtTime(0.25, audioCtx.currentTime);  // 自然に戻す
+
+        // 2. アナライザー作成
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 256;
-        const masterGain = audioCtx.createGain();
-        masterGain.gain.value = 0.6;
-        masterGain.connect(analyser);
+
+        // 3. 接続
+        compressor.connect(analyser);
         analyser.connect(audioCtx.destination);
     }
 
@@ -123,7 +137,9 @@ function playNote(noteIndex, colorStr) {
     const now = audioCtx.currentTime;
 
     const mainGain = audioCtx.createGain();
-    mainGain.connect(analyser);
+
+    // ★変更: アナライザーではなくコンプレッサーに接続 (音割れ防止回路を通す)
+    mainGain.connect(compressor);
 
     mainGain.gain.setValueAtTime(0, now);
     mainGain.gain.linearRampToValueAtTime(1.0, now + 0.05);
@@ -149,7 +165,8 @@ function playNote(noteIndex, colorStr) {
             osc.type = 'sine';
             osc.frequency.value = freq;
             const oscGain = audioCtx.createGain();
-            oscGain.gain.value = weight * 0.3;
+            // ★微調整: 重ね合わせの音量を少し下げる (0.3 -> 0.2)
+            oscGain.gain.value = weight * 0.2;
             osc.connect(oscGain);
             oscGain.connect(mainGain);
             osc.start(now);
@@ -159,11 +176,21 @@ function playNote(noteIndex, colorStr) {
         const baseFreq = 261.63;
         const freq = baseFreq * Math.pow(2, noteIndex / 12);
 
+        // ★微調整: 単音モードの音量も少し下げる (Default 1.0 -> 0.4)
+        // コンプレッサー前段で音量を適正にしておく
+        const volumeScale = 0.4;
+
         if (type === 'sine') {
             const osc = audioCtx.createOscillator();
             osc.type = 'sine';
             osc.frequency.value = freq;
-            osc.connect(mainGain);
+
+            const oscGain = audioCtx.createGain();
+            oscGain.gain.value = volumeScale;
+
+            osc.connect(oscGain);
+            oscGain.connect(mainGain);
+
             osc.start(now);
             osc.stop(now + 3.5);
         } else if (type === 'epiano') {
@@ -176,9 +203,16 @@ function playNote(noteIndex, colorStr) {
             const modGain = audioCtx.createGain();
             modGain.gain.setValueAtTime(freq * 1.5, now);
             modGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+
             modulator.connect(modGain);
             modGain.connect(carrier.frequency);
-            carrier.connect(mainGain);
+
+            const carrierGain = audioCtx.createGain();
+            carrierGain.gain.value = volumeScale;
+
+            carrier.connect(carrierGain);
+            carrierGain.connect(mainGain);
+
             carrier.start(now);
             modulator.start(now);
             carrier.stop(now + 3.5);
@@ -189,7 +223,6 @@ function playNote(noteIndex, colorStr) {
 }
 
 function updateCenterColor(color) {
-    // ★修正2: グローバル変数に現在色を保存
     currentBaseColor = color;
     centerDisplay.style.backgroundColor = color;
 }
@@ -219,11 +252,9 @@ function drawVisual() {
         }
     } else {
         const size = 50 + (smoothedVal * 3);
-        // ★修正3: customColors[0] (赤固定) ではなく、保存した現在色 (currentBaseColor) を使用
         centerDisplay.style.backgroundColor = currentBaseColor;
         centerDisplay.style.width = `${size}px`;
         centerDisplay.style.height = `${size}px`;
-        // 光る演出（boxShadow）にも現在色を適用
         centerDisplay.style.boxShadow = `0 0 ${size / 2}px ${currentBaseColor}`;
     }
 }
