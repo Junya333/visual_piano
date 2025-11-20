@@ -11,7 +11,6 @@ body {
     overflow: hidden;
 }
 
-/* ★追加: オーバーレイのスタイル */
 .overlay {
     position: fixed;
     top: 0;
@@ -23,14 +22,12 @@ body {
     align-items: center;
     justify-content: center;
     z-index: 999;
-    /* 最前面に表示 */
     transition: opacity 0.3s;
 }
 
 .overlay.hidden {
     opacity: 0;
     pointer-events: none;
-    /* 非表示時はクリックを透過 */
 }
 
 .overlay-content {
@@ -53,7 +50,6 @@ body {
     transform: scale(0.95);
 }
 
-/* 既存のスタイル */
 .controls {
     margin-bottom: 20px;
     z-index: 10;
@@ -137,7 +133,9 @@ select {
     z-index: 2;
 }
 
-.note-btn:active {
+/* ★変更: .active クラスを追加 (キーボード操作時の視覚効果用) */
+.note-btn:active,
+.note-btn.active {
     transform: scale(0.95);
     filter: brightness(1.2);
 }
