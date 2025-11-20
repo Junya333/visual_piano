@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Chromatone Piano</title>
+        <link rel="stylesheet" href="style.css">
+    </head>
+
+    <body>
+
+        <div class="controls">
+            <label>音色: </label>
+            <select id="toneType">
+                <option value="sine">サイン波 (Pure Sine)</option>
+                <option value="epiano">電子ピアノ (FM E-Piano)</option>
+                <option value="shepard" selected>シェパードトーン (Octave Layer)</option>
+            </select>
+        </div>
+
+        <div class="wheel-container" id="wheel">
+            <div class="center-circle" id="centerDisplay"></div>
+        </div>
+
+        <script src="script.js"></script>
+    </body>
+
+</html>
