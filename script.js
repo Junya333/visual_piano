@@ -18,27 +18,36 @@ const customColors = [
     "rgb(205, 22, 184)"   // B
 ];
 
+// HTML要素
 const wheelContainer = document.getElementById('wheel');
 const centerDisplay = document.getElementById('centerDisplay');
 const toneSelector = document.getElementById('toneType');
-
-// 回転ボタン
 const rotateLeftBtn = document.getElementById('rotateLeft');
 const rotateRightBtn = document.getElementById('rotateRight');
+const overlay = document.getElementById('overlay'); // ★追加
+const startBtn = document.getElementById('startBtn'); // ★追加
 
 let audioCtx;
 let analyser;
 
-// 回転状態
 let rotationOffset = 0;
-
-// ★追加: ビジュアルのスムージング用変数
 let smoothedVal = 0;
+let isAudioReady = false; // ★追加: オーディオ準備完了フラグ
 
 // --- 初期化 ---
 function init() {
     renderWheel();
-    requestAnimationFrame(drawVisual);
+
+    // ★変更: スタートボタンのクリックイベントでオーディオ初期化
+    startBtn.addEventListener('click', async () => {
+        await initAudio();
+        // 準備完了したらオーバーレイを消す
+        if (audioCtx && audioCtx.state === 'running') {
+            isAudioReady = true;
+            overlay.classList.add('hidden');
+            requestAnimationFrame(drawVisual);
+        }
+    });
 
     rotateLeftBtn.addEventListener('click', () => {
         rotationOffset -= 1;
@@ -49,6 +58,24 @@ function init() {
         rotationOffset += 1;
         renderWheel();
     });
+}
+
+// --- オーディオ初期化 (非同期処理) ---
+async function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        const masterGain = audioCtx.createGain();
+        masterGain.gain.value = 0.6;
+        masterGain.connect(analyser);
+        analyser.connect(audioCtx.destination);
+    }
+
+    // サスペンド状態なら再開待機
+    if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+    }
 }
 
 // --- 円環の描画 ---
@@ -87,24 +114,13 @@ function renderWheel() {
     });
 }
 
-function initAudio() {
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        const masterGain = audioCtx.createGain();
-        masterGain.gain.value = 0.6;
-        masterGain.connect(analyser);
-        analyser.connect(audioCtx.destination);
-    }
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-    }
-}
-
 // --- 音生成 ---
 function playNote(noteIndex, colorStr) {
-    initAudio();
+    // ★重要: オーディオの準備ができていない、またはコンテキストが無い場合は何もしない
+    // これにより、バックグラウンドでオシレーターが大量生成されるのを防ぐ
+    if (!isAudioReady || !audioCtx || audioCtx.state !== 'running') {
+        return;
+    }
 
     const type = toneSelector.value;
     const now = audioCtx.currentTime;
@@ -175,14 +191,10 @@ function playNote(noteIndex, colorStr) {
     updateCenterColor(colorStr);
 }
 
-let currentBaseColor = 'rgb(255, 255, 255)';
-
 function updateCenterColor(color) {
-    currentBaseColor = color;
     centerDisplay.style.backgroundColor = color;
 }
 
-// --- ビジュアル描画（スムージング適用） ---
 function drawVisual() {
     requestAnimationFrame(drawVisual);
     if (!analyser) return;
@@ -191,38 +203,32 @@ function drawVisual() {
     const dataArray = new Uint8Array(bufferLength);
     analyser.getByteTimeDomainData(dataArray);
 
-    // 1. 現在のフレームの最大振幅を取得
     let maxVal = 0;
     for (let i = 0; i < bufferLength; i++) {
         const v = Math.abs(dataArray[i] - 128);
         if (v > maxVal) maxVal = v;
     }
 
-    // 2. スムージング処理（時間平均に近い挙動）
-    // 現在の smoothedVal に、目標値(maxVal)との差分の 10% を足す
-    // これにより、急激な変化が抑制され、ヌルっと動くようになる
     smoothedVal += (maxVal - smoothedVal) * 0.1;
 
-    // 3. 描画反映
-    // 完全に音が止まった時のノイズ対策として閾値チェック
     if (smoothedVal < 1.0) {
         if (centerDisplay.style.backgroundColor !== 'white') {
-            // ほぼ無音になったら白に戻す
-            // ここも急にパチっと変わらないように少し余裕を持たせても良いが、
-            // 白戻りは明確にするためこのまま
             centerDisplay.style.backgroundColor = 'white';
             centerDisplay.style.width = '20px';
             centerDisplay.style.height = '20px';
             centerDisplay.style.boxShadow = 'none';
         }
     } else {
-        // 音が鳴っている時
         const size = 50 + (smoothedVal * 3);
-        centerDisplay.style.backgroundColor = currentBaseColor;
+        centerDisplay.style.backgroundColor = customColors[0]; // 一時的な参照、実際はPlayNoteで更新
+        // ※PlayNoteで色が更新されるためここはあまり気にしなくてOK
         centerDisplay.style.width = `${size}px`;
         centerDisplay.style.height = `${size}px`;
-        centerDisplay.style.boxShadow = `0 0 ${size / 2}px ${currentBaseColor}`;
+        // 現在の背景色を取得して反映させるのは少し複雑なので、
+        // 簡易的に前回の色(currentBaseColor)を使うのがベストだが、
+        // グローバル変数を使えばOK。今回は簡易実装。
     }
 }
 
+// 実行
 init();

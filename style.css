@@ -11,6 +11,49 @@ body {
     overflow: hidden;
 }
 
+/* ★追加: オーバーレイのスタイル */
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    /* 最前面に表示 */
+    transition: opacity 0.3s;
+}
+
+.overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+    /* 非表示時はクリックを透過 */
+}
+
+.overlay-content {
+    text-align: center;
+}
+
+#startBtn {
+    padding: 15px 40px;
+    font-size: 24px;
+    background-color: #eee;
+    border: none;
+    border-radius: 30px;
+    cursor: pointer;
+    color: #333;
+    font-weight: bold;
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+}
+
+#startBtn:active {
+    transform: scale(0.95);
+}
+
+/* 既存のスタイル */
 .controls {
     margin-bottom: 20px;
     z-index: 10;
@@ -36,7 +79,6 @@ select {
     cursor: pointer;
 }
 
-/* 回転ボタンのスタイル */
 .rotate-btn {
     width: 40px;
     height: 40px;
