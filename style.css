@@ -1,4 +1,4 @@
-body {
+ibody {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -14,6 +14,16 @@ body {
 .controls {
     margin-bottom: 20px;
     z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 select {
@@ -24,6 +34,26 @@ select {
     background: #444;
     color: white;
     cursor: pointer;
+}
+
+/* 回転ボタンのスタイル */
+.rotate-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 5px;
+    border: none;
+    background: #555;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.1s;
+}
+
+.rotate-btn:active {
+    background-color: #777;
 }
 
 .wheel-container {

@@ -1,42 +1,73 @@
-// --- 設定 ---
+i// --- 設定 ---
 // 音階名
 const notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
 // カスタムカラー (反時計回り配置用C=Red)
 const customColors = [
-    "rgb(255, 0, 0)",   // C
-    "rgb(255, 86, 35)",  // C#
-    "rgb(255, 158, 62)",  // D
-    "rgb(221, 177, 55)",  // D#
-    "rgb(250, 250, 44)",  // E
-    "rgb(122, 212, 95)",  // F
-    "rgb(72, 231, 103)",   // F#
-    "rgb(42, 128, 213)",   // G
-    "rgb(34, 73, 146)",   // G#
-    "rgb(25, 44, 132)",   // A
-    "rgb(95, 44, 88)",   // A#
-    "rgb(205, 22, 184)"   // B
+    "rgb(208, 34, 61)",   // C
+    "rgb(219, 107, 59)",  // C#
+    "rgb(225, 149, 71)",  // D
+    "rgb(231, 189, 69)",  // D#
+    "rgb(244, 244, 70)",  // E
+    "rgb(126, 190, 80)",  // F
+    "rgb(68, 163, 87)",   // F#
+    "rgb(23, 94, 176)",   // G
+    "rgb(27, 69, 145)",   // G#
+    "rgb(41, 57, 132)",   // A
+    "rgb(57, 44, 114)",   // A#
+    "rgb(133, 29, 116)"   // B
 ];
 
 const wheelContainer = document.getElementById('wheel');
 const centerDisplay = document.getElementById('centerDisplay');
 const toneSelector = document.getElementById('toneType');
 
+// 回転ボタン
+const rotateLeftBtn = document.getElementById('rotateLeft');
+const rotateRightBtn = document.getElementById('rotateRight');
+
 let audioCtx;
 let analyser;
 
+// 回転状態 (0 = 初期位置, 1 = 右に1つずれる, -1 = 左に1つずれる)
+let rotationOffset = 0;
+
 // --- 初期化 ---
 function init() {
+    renderWheel();
+    requestAnimationFrame(drawVisual);
+
+    // 回転ボタンのイベントリスナー
+    rotateLeftBtn.addEventListener('click', () => {
+        rotationOffset -= 1; // 反時計回り
+        renderWheel();
+    });
+
+    rotateRightBtn.addEventListener('click', () => {
+        rotationOffset += 1; // 時計回り
+        renderWheel();
+    });
+}
+
+// --- 円環の描画 (再描画対応) ---
+function renderWheel() {
+    // 既存のボタンを削除（中心の円以外）
+    const existingBtns = document.querySelectorAll('.note-btn');
+    existingBtns.forEach(btn => btn.remove());
+
     const radius = 130;
     const centerX = 160;
     const centerY = 160;
+    const angleStep = 360 / 12;
 
     notes.forEach((note, index) => {
         const color = customColors[index];
 
-        // 反時計回りに配置 (C=Top)
-        const angleStep = 360 / 12;
-        const placementAngleDeg = (-90 - (index * angleStep));
+        // 配置角度の計算
+        // 基本: -90度(12時)スタート, 反時計回り(- index * step)
+        // 回転オフセットを加算 (+ rotationOffset * step)
+        // ※右ボタン(offset+)で時計回りに配置が動くようにする
+        const placementAngleDeg = -90 - (index * angleStep) + (rotationOffset * angleStep);
         const placementAngleRad = placementAngleDeg * (Math.PI / 180);
 
         const x = centerX + radius * Math.cos(placementAngleRad);
@@ -58,8 +89,6 @@ function init() {
 
         wheelContainer.appendChild(btn);
     });
-
-    requestAnimationFrame(drawVisual);
 }
 
 function initAudio() {
@@ -84,17 +113,16 @@ function playNote(noteIndex, colorStr) {
     const type = toneSelector.value;
     const now = audioCtx.currentTime;
 
-    // 音量エンベロープ用 (共通)
     const mainGain = audioCtx.createGain();
     mainGain.connect(analyser);
 
     // アタック・ディケイ設定 (長く伸びる設定)
     mainGain.gain.setValueAtTime(0, now);
-    mainGain.gain.linearRampToValueAtTime(1.0, now + 0.05); // Attack
-    mainGain.gain.exponentialRampToValueAtTime(0.001, now + 3.0); // Decay
+    mainGain.gain.linearRampToValueAtTime(1.0, now + 0.05);
+    mainGain.gain.exponentialRampToValueAtTime(0.001, now + 3.0);
 
     if (type === 'shepard') {
-        // --- シェパードトーン生成 ---
+        // --- シェパードトーン ---
         const baseC = 16.35;
         const pitchCoef = Math.pow(2, noteIndex / 12);
         const centerFreq = 500;
@@ -126,7 +154,7 @@ function playNote(noteIndex, colorStr) {
         }
 
     } else {
-        // --- 通常の音色 (Sine, E-Piano) ---
+        // --- 通常音色 ---
         const baseFreq = 261.63;
         const freq = baseFreq * Math.pow(2, noteIndex / 12);
 
