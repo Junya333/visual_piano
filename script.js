@@ -1,8 +1,6 @@
 // --- 設定 ---
-// 音階名
 const notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
-// カスタムカラー (ユーザー設定)
 const customColors = [
     "rgb(255, 0, 0)",   // C
     "rgb(255, 86, 35)",  // C#
@@ -18,7 +16,14 @@ const customColors = [
     "rgb(205, 22, 184)"   // B
 ];
 
-// HTML要素
+// ★追加: キーボードマッピング
+// z=C, s=C#, x=D ... ,=C
+const keyMap = {
+    'z': 0, 's': 1, 'x': 2, 'd': 3, 'c': 4, 'v': 5,
+    'g': 6, 'b': 7, 'h': 8, 'n': 9, 'j': 10, 'm': 11,
+    ',': 0 // 上のCは下のC(0)と同じ音とする
+};
+
 const wheelContainer = document.getElementById('wheel');
 const centerDisplay = document.getElementById('centerDisplay');
 const toneSelector = document.getElementById('toneType');
@@ -27,20 +32,20 @@ const rotateRightBtn = document.getElementById('rotateRight');
 const overlay = document.getElementById('overlay');
 const startBtn = document.getElementById('startBtn');
 
-// グローバル変数
 let audioCtx;
 let analyser;
-let compressor; // ★追加: 音割れ防止用コンプレッサー
+let compressor;
 
 let rotationOffset = 0;
 let smoothedVal = 0;
 let isAudioReady = false;
-let currentBaseColor = 'rgb(255, 255, 255)'; // 現在の色保存用
+let currentBaseColor = 'rgb(255, 255, 255)';
 
 // --- 初期化 ---
 function init() {
     renderWheel();
 
+    // Startボタン処理
     startBtn.addEventListener('click', async () => {
         await initAudio();
         if (audioCtx && audioCtx.state === 'running') {
@@ -50,6 +55,7 @@ function init() {
         }
     });
 
+    // 回転ボタン
     rotateLeftBtn.addEventListener('click', () => {
         rotationOffset -= 1;
         renderWheel();
@@ -59,6 +65,46 @@ function init() {
         rotationOffset += 1;
         renderWheel();
     });
+
+    // ★追加: キーボードイベントリスナー
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+}
+
+// ★追加: キーダウン処理
+function handleKeyDown(e) {
+    if (e.repeat) return; // 押しっぱなしによる連打防止
+
+    // 押されたキーに対応する音があるか確認
+    const key = e.key.toLowerCase();
+    if (key in keyMap) {
+        const index = keyMap[key];
+        const color = customColors[index];
+
+        // 音を鳴らす
+        playNote(index, color);
+
+        // 視覚効果: ボタンを凹ませる
+        // data-index属性を使って該当のボタンを探す
+        const btn = document.querySelector(`.note-btn[data-index="${index}"]`);
+        if (btn) {
+            btn.classList.add('active');
+        }
+    }
+}
+
+// ★追加: キーアップ処理
+function handleKeyUp(e) {
+    const key = e.key.toLowerCase();
+    if (key in keyMap) {
+        const index = keyMap[key];
+
+        // 視覚効果: ボタンを元に戻す
+        const btn = document.querySelector(`.note-btn[data-index="${index}"]`);
+        if (btn) {
+            btn.classList.remove('active');
+        }
+    }
 }
 
 // --- オーディオ初期化 ---
@@ -66,22 +112,16 @@ async function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-        // ★修正: 音響回路の構築 (コンプレッサーの導入)
-        // 音の流れ: [各音源] -> [Compressor] -> [Analyser] -> [Destination(スピーカー)]
-
-        // 1. コンプレッサー作成 (リミッターとして設定)
         compressor = audioCtx.createDynamicsCompressor();
-        compressor.threshold.setValueAtTime(-24, audioCtx.currentTime); // -24dBを超えたら圧縮開始
-        compressor.knee.setValueAtTime(30, audioCtx.currentTime);       // 滑らかに圧縮
-        compressor.ratio.setValueAtTime(12, audioCtx.currentTime);      // 強く圧縮して音割れを防ぐ
-        compressor.attack.setValueAtTime(0.003, audioCtx.currentTime);  // 素早く反応
-        compressor.release.setValueAtTime(0.25, audioCtx.currentTime);  // 自然に戻す
+        compressor.threshold.setValueAtTime(-24, audioCtx.currentTime);
+        compressor.knee.setValueAtTime(30, audioCtx.currentTime);
+        compressor.ratio.setValueAtTime(12, audioCtx.currentTime);
+        compressor.attack.setValueAtTime(0.003, audioCtx.currentTime);
+        compressor.release.setValueAtTime(0.25, audioCtx.currentTime);
 
-        // 2. アナライザー作成
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 256;
 
-        // 3. 接続
         compressor.connect(analyser);
         analyser.connect(audioCtx.destination);
     }
@@ -111,6 +151,9 @@ function renderWheel() {
 
         const btn = document.createElement('div');
         btn.className = 'note-btn';
+        // ★変更: キーボード連携用にインデックスを保存
+        btn.dataset.index = index;
+
         btn.style.backgroundColor = color;
         btn.style.left = (x - 30) + 'px';
         btn.style.top = (y - 30) + 'px';
@@ -137,8 +180,6 @@ function playNote(noteIndex, colorStr) {
     const now = audioCtx.currentTime;
 
     const mainGain = audioCtx.createGain();
-
-    // ★変更: アナライザーではなくコンプレッサーに接続 (音割れ防止回路を通す)
     mainGain.connect(compressor);
 
     mainGain.gain.setValueAtTime(0, now);
@@ -165,7 +206,6 @@ function playNote(noteIndex, colorStr) {
             osc.type = 'sine';
             osc.frequency.value = freq;
             const oscGain = audioCtx.createGain();
-            // ★微調整: 重ね合わせの音量を少し下げる (0.3 -> 0.2)
             oscGain.gain.value = weight * 0.2;
             osc.connect(oscGain);
             oscGain.connect(mainGain);
@@ -175,9 +215,6 @@ function playNote(noteIndex, colorStr) {
     } else {
         const baseFreq = 261.63;
         const freq = baseFreq * Math.pow(2, noteIndex / 12);
-
-        // ★微調整: 単音モードの音量も少し下げる (Default 1.0 -> 0.4)
-        // コンプレッサー前段で音量を適正にしておく
         const volumeScale = 0.4;
 
         if (type === 'sine') {
@@ -203,7 +240,6 @@ function playNote(noteIndex, colorStr) {
             const modGain = audioCtx.createGain();
             modGain.gain.setValueAtTime(freq * 1.5, now);
             modGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-
             modulator.connect(modGain);
             modGain.connect(carrier.frequency);
 
@@ -259,5 +295,4 @@ function drawVisual() {
     }
 }
 
-// 実行
 init();

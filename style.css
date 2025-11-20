@@ -133,9 +133,8 @@ select {
     z-index: 2;
 }
 
-/* クリック時のスタイル */
+/* ★変更: .active クラスを追加 (キーボード操作時の視覚効果用) */
 .note-btn:active,
-/* ★追加: キーボード操作時のスタイル */
 .note-btn.active {
     transform: scale(0.95);
     filter: brightness(1.2);
